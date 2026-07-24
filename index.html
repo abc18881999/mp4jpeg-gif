@@ -89,11 +89,17 @@
 
         mediaEl.src = src;
         if (mediaType === "video") {
+          mediaEl.setAttribute("aria-label", "视频内容");
           mediaEl.controls = true;
           mediaEl.loop = true;
           mediaEl.muted = true;
           mediaEl.playsInline = true;
+          const tip = document.createElement("p");
+          tip.textContent = "视频默认静音，可通过播放器取消静音。";
+          app.replaceChildren(mediaEl, tip);
+          return;
         }
+        mediaEl.alt = "图片内容";
 
         app.replaceChildren(mediaEl);
       })();
