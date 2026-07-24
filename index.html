@@ -40,6 +40,9 @@
       <p>请使用 ?media=资源链接 访问，例如：?media=https://example.com/demo.gif</p>
     </main>
     <script>
+      const VIDEO_EXT = new Set(["mp4", "webm", "ogg"]);
+      const IMAGE_EXT = new Set(["gif", "jpg", "jpeg", "png", "webp", "avif", "svg"]);
+
       (() => {
         const app = document.getElementById("app");
         const params = new URLSearchParams(window.location.search);
@@ -50,11 +53,13 @@
         let url;
         try {
           url = new URL(media);
-          if (!["http:", "https:"].includes(url.protocol)) {
-            throw new Error("Unsupported protocol");
-          }
         } catch {
-          app.textContent = "无效 media 链接。";
+          app.textContent = "无效 media 链接：请传入完整的 http(s) 资源地址。";
+          return;
+        }
+
+        if (!["http:", "https:"].includes(url.protocol)) {
+          app.textContent = "无效 media 链接：仅支持 http 或 https 协议。";
           return;
         }
 
@@ -62,9 +67,13 @@
         const filePath = url.pathname;
         const lastDot = filePath.lastIndexOf(".");
         const ext = lastDot >= 0 ? filePath.slice(lastDot + 1).toLowerCase() : "";
-        const videoExt = new Set(["mp4", "webm", "ogg"]);
-        const imageExt = new Set(["gif", "jpg", "jpeg", "png", "webp", "avif", "svg"]);
-        const mediaType = videoExt.has(ext) ? "video" : imageExt.has(ext) ? "img" : "";
+        let mediaType = "";
+
+        if (VIDEO_EXT.has(ext)) {
+          mediaType = "video";
+        } else if (IMAGE_EXT.has(ext)) {
+          mediaType = "img";
+        }
 
         if (!mediaType) {
           app.textContent = "仅支持常见图片、动图或视频格式链接。";
@@ -74,7 +83,7 @@
         const mediaEl = document.createElement(mediaType);
 
         mediaEl.src = src;
-        if (mediaEl.tagName === "VIDEO") {
+        if (mediaEl.tagName.toLowerCase() === "video") {
           mediaEl.controls = true;
           mediaEl.autoplay = true;
           mediaEl.loop = true;
