@@ -18,6 +18,8 @@ https://你的域名/?media=https://example.com/demo.mp4&text=我的视频
 - `mp4 / webm / ogg` 使用 `<video>` 播放
 - `gif / jpg / jpeg / png / webp / avif / svg` 使用 `<img>` 展示
 
+建议为可访问性添加 `text` 参数作为媒体说明（会用于图片 `alt` 和视频说明）。
+
 ## 部署（GitHub Pages + 自定义域名）
 
 1. 把仓库内容推送到 GitHub。

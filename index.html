@@ -37,6 +37,7 @@
   </head>
   <body>
     <main id="app">
+      <h1 style="font-size: 1.1rem; font-weight: 600; margin: 0 0 8px">Media Link</h1>
       <p>请使用 ?media=资源链接 访问，例如：?media=https://example.com/demo.gif</p>
     </main>
     <script>
@@ -73,8 +74,8 @@
         const filePath = url.pathname;
         const lastDot = filePath.lastIndexOf(".");
         const ext = lastDot >= 0 ? filePath.slice(lastDot + 1).toLowerCase() : "";
-        const fallbackDesc = decodeURIComponent(filePath.split("/").pop() || "media");
-        const mediaDesc = desc?.trim() || fallbackDesc;
+        const fallbackDesc = decodeURIComponent(filePath.split("/").pop() || "").trim();
+        const mediaDesc = desc?.trim() || fallbackDesc || "未命名媒体";
         let mediaType = "";
 
         if (VIDEO_EXT.has(ext)) {
@@ -92,13 +93,14 @@
 
         mediaEl.src = src;
         if (mediaType === "video") {
-          mediaEl.setAttribute("aria-label", mediaDesc);
           mediaEl.controls = true;
           mediaEl.loop = true;
           mediaEl.muted = true;
           mediaEl.playsInline = true;
           const tip = document.createElement("p");
-          tip.textContent = "视频默认静音，可通过播放器取消静音。";
+          tip.id = "media-desc";
+          tip.textContent = `${mediaDesc}（视频默认静音，可通过播放器取消静音。）`;
+          mediaEl.setAttribute("aria-labelledby", tip.id);
           app.replaceChildren(mediaEl, tip);
           return;
         }
