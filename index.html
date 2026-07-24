@@ -43,6 +43,7 @@
     <script>
       const VIDEO_EXT = new Set(["mp4", "webm", "ogg"]);
       const IMAGE_EXT = new Set(["gif", "jpg", "jpeg", "png", "webp", "avif", "svg"]);
+      const DEFAULT_MEDIA_DESC = "未命名媒体";
 
       (() => {
         const app = document.getElementById("app");
@@ -74,8 +75,13 @@
         const filePath = url.pathname;
         const lastDot = filePath.lastIndexOf(".");
         const ext = lastDot >= 0 ? filePath.slice(lastDot + 1).toLowerCase() : "";
-        const fallbackDesc = decodeURIComponent(filePath.split("/").pop() || "").trim();
-        const mediaDesc = desc?.trim() || fallbackDesc || "未命名媒体";
+        let fallbackDesc = "";
+        try {
+          fallbackDesc = decodeURIComponent(filePath.split("/").pop() || "").trim();
+        } catch {
+          fallbackDesc = "";
+        }
+        const mediaDesc = desc?.trim() || fallbackDesc || DEFAULT_MEDIA_DESC;
         let mediaType = "";
 
         if (VIDEO_EXT.has(ext)) {
