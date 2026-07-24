@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mp4jpeg-gif",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-24",
+  "r2_buckets": [
+    {
+      "binding": "UPLOAD_BUCKET",
+      "bucket_name": "mp4jpeg-gif-uploads"
+    }
+  ]
+}

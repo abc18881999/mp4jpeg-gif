@@ -1,0 +1,28 @@
+{
+  "name": "mp4jpeg-gif",
+  "version": "1.0.0",
+  "description": "储存视频、图片和动图。",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run",
+    "test": "npm run check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abc18881999/mp4jpeg-gif.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/abc18881999/mp4jpeg-gif/issues"
+  },
+  "homepage": "https://github.com/abc18881999/mp4jpeg-gif#readme",
+  "private": true,
+  "devDependencies": {
+    "wrangler": "4.114.0"
+  }
+}
