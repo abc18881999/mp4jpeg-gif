@@ -16,7 +16,7 @@ https://你的域名/?media=https://example.com/demo.mp4&text=我的视频
 页面会自动识别资源类型：
 
 - `mp4 / webm / ogg` 使用 `<video>` 播放
-- `gif / jpg / jpeg / png / webp / avif / svg` 使用 `<img>` 展示
+- `gif / jpg / jpeg / png / webp / avif` 使用 `<img>` 展示
 
 建议为可访问性添加 `text` 参数作为媒体说明（会用于图片 `alt` 和视频说明）。
 
