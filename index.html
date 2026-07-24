@@ -59,9 +59,19 @@
         }
 
         const src = url.toString();
-        const ext = src.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase();
+        const filePath = url.pathname;
+        const lastDot = filePath.lastIndexOf(".");
+        const ext = lastDot >= 0 ? filePath.slice(lastDot + 1).toLowerCase() : "";
         const videoExt = new Set(["mp4", "webm", "ogg"]);
-        const mediaEl = document.createElement(videoExt.has(ext) ? "video" : "img");
+        const imageExt = new Set(["gif", "jpg", "jpeg", "png", "webp", "avif", "svg"]);
+        const mediaType = videoExt.has(ext) ? "video" : imageExt.has(ext) ? "img" : "";
+
+        if (!mediaType) {
+          app.textContent = "仅支持常见图片、动图或视频格式链接。";
+          return;
+        }
+
+        const mediaEl = document.createElement(mediaType);
 
         mediaEl.src = src;
         if (mediaEl.tagName === "VIDEO") {
