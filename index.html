@@ -47,6 +47,7 @@
         const app = document.getElementById("app");
         const params = new URLSearchParams(window.location.search);
         const media = params.get("media");
+        const desc = params.get("text");
 
         if (!media) {
           if (params.toString()) {
@@ -72,6 +73,8 @@
         const filePath = url.pathname;
         const lastDot = filePath.lastIndexOf(".");
         const ext = lastDot >= 0 ? filePath.slice(lastDot + 1).toLowerCase() : "";
+        const fallbackDesc = decodeURIComponent(filePath.split("/").pop() || "media");
+        const mediaDesc = desc?.trim() || fallbackDesc;
         let mediaType = "";
 
         if (VIDEO_EXT.has(ext)) {
@@ -89,7 +92,7 @@
 
         mediaEl.src = src;
         if (mediaType === "video") {
-          mediaEl.setAttribute("aria-label", "视频内容");
+          mediaEl.setAttribute("aria-label", mediaDesc);
           mediaEl.controls = true;
           mediaEl.loop = true;
           mediaEl.muted = true;
@@ -99,7 +102,7 @@
           app.replaceChildren(mediaEl, tip);
           return;
         }
-        mediaEl.alt = "图片内容";
+        mediaEl.alt = mediaDesc;
 
         app.replaceChildren(mediaEl);
       })();

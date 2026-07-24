@@ -10,6 +10,7 @@
 https://你的域名/?media=https://example.com/demo.gif
 https://你的域名/?media=https://example.com/demo.jpg
 https://你的域名/?media=https://example.com/demo.mp4
+https://你的域名/?media=https://example.com/demo.mp4&text=我的视频
 ```
 
 页面会自动识别资源类型：
