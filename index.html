@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Media Link</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #111;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      main {
+        width: min(100vw, 960px);
+        padding: 16px;
+        box-sizing: border-box;
+        text-align: center;
+      }
+      img,
+      video {
+        max-width: 100%;
+        max-height: 85vh;
+        border-radius: 8px;
+      }
+      p {
+        margin: 0;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app">
+      <h1 style="font-size: 1.1rem; font-weight: 600; margin: 0 0 8px">Media Link</h1>
+      <p>请使用 ?media=资源链接访问（Use ?media=URL），例如：?media=https://example.com/demo.gif</p>
+    </main>
+    <script>
+      const VIDEO_EXT = new Set(["mp4", "webm", "ogg"]);
+      const IMAGE_EXT = new Set(["gif", "jpg", "jpeg", "png", "webp", "avif"]);
+      const DEFAULT_MEDIA_DESC = "未命名媒体";
+
+      (() => {
+        const app = document.getElementById("app");
+        const params = new URLSearchParams(window.location.search);
+        const media = params.get("media");
+        const desc = params.get("text");
+
+        if (!media) {
+          if (params.toString()) {
+            app.textContent = "缺少 media 参数，请使用 ?media=资源链接。Missing media parameter, use ?media=URL.";
+          }
+          return;
+        }
+
+        let url;
+        try {
+          url = new URL(media);
+        } catch {
+          app.textContent =
+            "无效 media 链接：请传入完整的 http(s) 资源地址。Invalid media URL: use a full http(s) URL.";
+          return;
+        }
+
+        if (!["http:", "https:"].includes(url.protocol)) {
+          app.textContent =
+            "无效 media 链接：仅支持 http 或 https 协议。Invalid media URL: only http/https protocols are supported.";
+          return;
+        }
+
+        const src = url.toString();
+        const filePath = url.pathname;
+        const lastDot = filePath.lastIndexOf(".");
+        const ext = lastDot >= 0 ? filePath.slice(lastDot + 1).toLowerCase() : "";
+        let fallbackDesc = "";
+        try {
+          fallbackDesc = decodeURIComponent(filePath.split("/").pop() || "").trim();
+        } catch {
+          fallbackDesc = "";
+        }
+        const mediaDesc = desc?.trim() || fallbackDesc || DEFAULT_MEDIA_DESC;
+        let mediaType = "";
+
+        if (VIDEO_EXT.has(ext)) {
+          mediaType = "video";
+        } else if (IMAGE_EXT.has(ext)) {
+          mediaType = "img";
+        }
+
+        if (!mediaType) {
+          app.textContent =
+            "仅支持常见图片、动图或视频格式链接。Only common image, GIF, and video formats are supported.";
+          return;
+        }
+
+        const mediaEl = document.createElement(mediaType);
+
+        mediaEl.src = src;
+        mediaEl.referrerPolicy = "no-referrer";
+        if (mediaType === "video") {
+          mediaEl.controls = true;
+          mediaEl.loop = true;
+          mediaEl.muted = true;
+          mediaEl.playsInline = true;
+          const tip = document.createElement("p");
+          tip.id = "media-desc";
+          tip.setAttribute("aria-live", "polite");
+          tip.textContent = `${mediaDesc}（视频默认静音，可通过播放器取消静音。Video is muted by default; unmute in player controls.）`;
+          mediaEl.setAttribute("aria-labelledby", tip.id);
+          app.replaceChildren(mediaEl, tip);
+          return;
+        }
+        mediaEl.alt = mediaDesc;
+
+        app.replaceChildren(mediaEl);
+      })();
+    </script>
+  </body>
+</html>
