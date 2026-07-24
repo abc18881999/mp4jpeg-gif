@@ -48,7 +48,12 @@
         const params = new URLSearchParams(window.location.search);
         const media = params.get("media");
 
-        if (!media) return;
+        if (!media) {
+          if (params.toString()) {
+            app.textContent = "缺少 media 参数，请使用 ?media=资源链接。";
+          }
+          return;
+        }
 
         let url;
         try {
@@ -83,9 +88,8 @@
         const mediaEl = document.createElement(mediaType);
 
         mediaEl.src = src;
-        if (mediaEl.tagName.toLowerCase() === "video") {
+        if (mediaType === "video") {
           mediaEl.controls = true;
-          mediaEl.autoplay = true;
           mediaEl.loop = true;
           mediaEl.muted = true;
           mediaEl.playsInline = true;
