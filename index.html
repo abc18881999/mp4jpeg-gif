@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Media Link</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #111;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      main {
+        width: min(100vw, 960px);
+        padding: 16px;
+        box-sizing: border-box;
+        text-align: center;
+      }
+      img,
+      video {
+        max-width: 100%;
+        max-height: 85vh;
+        border-radius: 8px;
+      }
+      p {
+        margin: 0;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app">
+      <p>请使用 ?media=资源链接 访问，例如：?media=https://example.com/demo.gif</p>
+    </main>
+    <script>
+      (() => {
+        const app = document.getElementById("app");
+        const params = new URLSearchParams(window.location.search);
+        const media = params.get("media");
+
+        if (!media) return;
+
+        let url;
+        try {
+          url = new URL(media);
+          if (!["http:", "https:"].includes(url.protocol)) {
+            throw new Error("Unsupported protocol");
+          }
+        } catch {
+          app.textContent = "无效 media 链接。";
+          return;
+        }
+
+        const src = url.toString();
+        const ext = src.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase();
+        const videoExt = new Set(["mp4", "webm", "ogg"]);
+        const mediaEl = document.createElement(videoExt.has(ext) ? "video" : "img");
+
+        mediaEl.src = src;
+        if (mediaEl.tagName === "VIDEO") {
+          mediaEl.controls = true;
+          mediaEl.autoplay = true;
+          mediaEl.loop = true;
+          mediaEl.muted = true;
+          mediaEl.playsInline = true;
+        }
+
+        app.replaceChildren(mediaEl);
+      })();
+    </script>
+  </body>
+</html>
