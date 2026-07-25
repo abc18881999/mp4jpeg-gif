@@ -12,43 +12,51 @@ const MAX_UPLOAD_SIZE = 500 * 1024 * 1024;
 const PRESIGNED_URL_TTL_SECONDS = 900;
 const META_PREFIX = 'meta/';
 const OBJECT_PREFIX = 'uploads/';
+const API_PREFIX = '/api/uploads';
+const ADMIN_TOKEN_ENV_KEY = 'ADMIN_TOKEN';
 
 export default {
   async fetch(request, env) {
     try {
       const url = new URL(request.url);
 
-      if (request.method === 'GET' && url.pathname === '/') {
-        return htmlResponse(renderPage());
+      if (url.pathname.startsWith(API_PREFIX) && request.method === 'OPTIONS') {
+        return buildPreflightResponse(request, env);
       }
 
-      if (request.method === 'POST' && url.pathname === '/api/uploads/sign') {
+      if (request.method === 'GET' && url.pathname === '/') {
+        const cspNonce = crypto.randomUUID().replaceAll('-', '');
+        return htmlResponse(renderPage(cspNonce), { cspNonce });
+      }
+
+      if (request.method === 'POST' && url.pathname === `${API_PREFIX}/sign`) {
         return handleSignUpload(request, env);
       }
 
-      if (request.method === 'POST' && url.pathname === '/api/uploads/complete') {
+      if (request.method === 'POST' && url.pathname === `${API_PREFIX}/complete`) {
         return handleCompleteUpload(request, env);
       }
 
-      if (request.method === 'GET' && url.pathname.startsWith('/api/uploads/')) {
-        const uploadId = url.pathname.replace('/api/uploads/', '');
-        return handleGetUpload(uploadId, env);
+      if (request.method === 'GET' && url.pathname.startsWith(`${API_PREFIX}/`)) {
+        const uploadId = url.pathname.replace(`${API_PREFIX}/`, '');
+        return handleGetUpload(request, env, uploadId);
       }
 
-      return jsonResponse({ error: 'Not found' }, 404);
+      return jsonResponse({ error: 'Not found' }, 404, request, env);
     } catch (error) {
       console.error(error);
       if (error instanceof HttpError) {
-        return jsonResponse({ error: error.message }, error.status);
+        return jsonResponse({ error: error.message }, error.status, request, env);
       }
 
-      return jsonResponse({ error: 'Internal server error' }, 500);
+      return jsonResponse({ error: 'Internal server error' }, 500, request, env);
     }
   },
 };
 
 async function handleSignUpload(request, env) {
   assertEnv(env);
+  assertAuthorizedRequest(request, env);
 
   const { filename, contentType, size } = await readJson(request);
   validateUploadRequest({ filename, contentType, size });
@@ -89,12 +97,13 @@ async function handleSignUpload(request, env) {
     headers: {
       'Content-Type': contentType,
     },
-    objectKey,
     expiresIn: PRESIGNED_URL_TTL_SECONDS,
-  });
+  }, 200, request, env);
 }
 
 async function handleCompleteUpload(request, env) {
+  assertEnv(env);
+  assertAuthorizedRequest(request, env);
   const { uploadId } = await readJson(request);
   if (!uploadId) {
     throw new HttpError(400, 'uploadId is required');
@@ -122,16 +131,19 @@ async function handleCompleteUpload(request, env) {
     httpMetadata: { contentType: 'application/json' },
   });
 
-  return jsonResponse(updated);
+  return jsonResponse(sanitizeRecordForClient(updated), 200, request, env);
 }
 
-async function handleGetUpload(uploadId, env) {
+async function handleGetUpload(request, env, uploadId) {
+  assertEnv(env);
+  validateUploadId(uploadId);
+  assertAuthorizedRequest(request, env);
   const record = await loadRecord(uploadId, env);
   if (!record) {
     throw new HttpError(404, 'Upload record not found');
   }
 
-  return jsonResponse(record);
+  return jsonResponse(sanitizeRecordForClient(record), 200, request, env);
 }
 
 async function loadRecord(uploadId, env) {
@@ -152,6 +164,10 @@ function validateUploadRequest({ filename, contentType, size }) {
     throw new HttpError(400, 'filename is required');
   }
 
+  if (filename.length > 255) {
+    throw new HttpError(400, 'filename is too long');
+  }
+
   if (!contentType || typeof contentType !== 'string') {
     throw new HttpError(400, 'contentType is required');
   }
@@ -167,6 +183,26 @@ function validateUploadRequest({ filename, contentType, size }) {
   if (size > MAX_UPLOAD_SIZE) {
     throw new HttpError(400, `size exceeds limit of ${MAX_UPLOAD_SIZE} bytes`);
   }
+}
+
+function validateUploadId(uploadId) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uploadId)) {
+    throw new HttpError(400, 'Invalid uploadId');
+  }
+}
+
+function sanitizeRecordForClient(record) {
+  return {
+    uploadId: record.uploadId,
+    filename: record.filename,
+    contentType: record.contentType,
+    size: record.size,
+    status: record.status,
+    createdAt: record.createdAt,
+    expiresAt: record.expiresAt,
+    uploadedAt: record.uploadedAt ?? null,
+    storedSize: record.storedSize ?? null,
+  };
 }
 
 function buildObjectKey(uploadId, filename) {
@@ -236,12 +272,58 @@ function encodeR2Path(objectKey) {
 }
 
 function assertEnv(env) {
-  const required = ['R2_ACCOUNT_ID', 'R2_BUCKET_NAME', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'UPLOAD_BUCKET'];
+  const required = ['R2_ACCOUNT_ID', 'R2_BUCKET_NAME', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'UPLOAD_BUCKET', ADMIN_TOKEN_ENV_KEY];
   for (const key of required) {
     if (!env[key]) {
       throw new HttpError(500, `Missing required environment binding: ${key}`);
     }
   }
+}
+
+function assertAuthorizedRequest(request, env) {
+  assertAllowedOrigin(request, env);
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new HttpError(401, 'Missing bearer token');
+  }
+
+  const providedToken = authHeader.slice('Bearer '.length).trim();
+  if (!providedToken || !constantTimeEqual(providedToken, env[ADMIN_TOKEN_ENV_KEY])) {
+    throw new HttpError(403, 'Invalid bearer token');
+  }
+}
+
+function assertAllowedOrigin(request, env) {
+  const origin = request.headers.get('origin');
+  if (!origin) {
+    return;
+  }
+
+  const requestUrl = new URL(request.url);
+  const allowedOrigins = getAllowedOrigins(env, requestUrl.origin);
+  if (!allowedOrigins.has(origin)) {
+    throw new HttpError(403, 'Origin not allowed');
+  }
+}
+
+function getAllowedOrigins(env, requestOrigin) {
+  const configuredOrigins = String(env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return new Set([requestOrigin, ...configuredOrigins]);
+}
+
+function buildPreflightResponse(request, env) {
+  assertAllowedOrigin(request, env);
+  return new Response(null, {
+    status: 204,
+    headers: buildSecurityHeaders({
+      contentType: null,
+      extraHeaders: buildCorsHeaders(request, env),
+    }),
+  });
 }
 
 async function readJson(request) {
@@ -252,7 +334,7 @@ async function readJson(request) {
   }
 }
 
-function renderPage() {
+function renderPage(cspNonce) {
   return `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -272,6 +354,11 @@ function renderPage() {
     <p class="muted">前端先向 Worker 申请预签名 URL，再直接把文件上传到 R2。</p>
     <form id="upload-form">
       <label>
+        访问令牌
+        <input id="token-input" name="token" type="password" autocomplete="current-password" required />
+      </label>
+      <div style="margin-top: 1rem;"></div>
+      <label>
         选择文件
         <input id="file-input" name="file" type="file" accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/png,image/gif,image/webp" required />
       </label>
@@ -285,16 +372,22 @@ function renderPage() {
       <pre id="output">等待上传…</pre>
     </div>
 
-    <script>
+    <script nonce="${cspNonce}">
       const form = document.getElementById('upload-form');
+      const tokenInput = document.getElementById('token-input');
       const fileInput = document.getElementById('file-input');
       const output = document.getElementById('output');
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const file = fileInput.files[0];
+        const token = tokenInput.value.trim();
         if (!file) {
           output.textContent = '请先选择文件';
+          return;
+        }
+        if (!token) {
+          output.textContent = '请先填写访问令牌';
           return;
         }
 
@@ -303,7 +396,10 @@ function renderPage() {
 
           const signResponse = await fetch('/api/uploads/sign', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Authorization': 'Bearer ' + token,
+              'Content-Type': 'application/json',
+            },
             body: JSON.stringify({
               filename: file.name,
               contentType: file.type,
@@ -332,7 +428,10 @@ function renderPage() {
           output.textContent = '3/3 确认上传结果…';
           const completeResponse = await fetch('/api/uploads/complete', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Authorization': 'Bearer ' + token,
+              'Content-Type': 'application/json',
+            },
             body: JSON.stringify({ uploadId: signPayload.uploadId }),
           });
 
@@ -347,23 +446,79 @@ function renderPage() {
 </html>`;
 }
 
-function jsonResponse(payload, status = 200) {
+function jsonResponse(payload, status = 200, request = null, env = {}) {
   return new Response(JSON.stringify(payload, null, 2), {
     status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-    },
+    headers: buildSecurityHeaders({
+      contentType: 'application/json; charset=utf-8',
+      extraHeaders: request ? buildCorsHeaders(request, env) : {},
+    }),
   });
 }
 
-function htmlResponse(html) {
+function htmlResponse(html, options = {}) {
   return new Response(html, {
-    headers: {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'no-store',
-    },
+    headers: buildSecurityHeaders({
+      contentType: 'text/html; charset=utf-8',
+      cspNonce: options.cspNonce ?? null,
+    }),
   });
+}
+
+function buildSecurityHeaders({ contentType, cspNonce = null, extraHeaders = {} }) {
+  const headers = {
+    'cache-control': 'no-store',
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-resource-policy': 'same-origin',
+    'permissions-policy': 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()',
+    'referrer-policy': 'no-referrer',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
+    ...extraHeaders,
+  };
+
+  if (contentType) {
+    headers['content-type'] = contentType;
+  }
+
+  if (cspNonce) {
+    headers['content-security-policy'] = [
+      "default-src 'none'",
+      "base-uri 'none'",
+      "connect-src 'self' https://*.r2.cloudflarestorage.com",
+      "font-src 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "img-src 'self' data:",
+      "object-src 'none'",
+      `script-src 'nonce-${cspNonce}'`,
+      "style-src 'unsafe-inline'",
+    ].join('; ');
+  }
+
+  return headers;
+}
+
+function buildCorsHeaders(request, env) {
+  const origin = request.headers.get('origin');
+  if (!origin) {
+    return {};
+  }
+
+  const requestUrl = new URL(request.url);
+  const allowedOrigins = getAllowedOrigins(env, requestUrl.origin);
+  if (!allowedOrigins.has(origin)) {
+    return {};
+  }
+
+  return {
+    'access-control-allow-headers': 'Authorization, Content-Type',
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-origin': origin,
+    'access-control-max-age': '86400',
+    vary: 'Origin',
+  };
 }
 
 async function sha256Hex(value) {
@@ -408,4 +563,17 @@ class HttpError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+function constantTimeEqual(left, right) {
+  const leftBytes = new TextEncoder().encode(String(left));
+  const rightBytes = new TextEncoder().encode(String(right));
+  const length = Math.max(leftBytes.length, rightBytes.length);
+  let diff = leftBytes.length ^ rightBytes.length;
+
+  for (let index = 0; index < length; index += 1) {
+    diff |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
+  }
+
+  return diff === 0;
 }
